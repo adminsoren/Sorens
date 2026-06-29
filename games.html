@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Free</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #f0fdf4; /* Soft pastel green background */
+        }
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ffb703;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="bg-amber-400 text-white py-6 px-4 shadow-lg rounded-b-3xl text-center relative overflow-hidden">
+        <div class="absolute -top-10 -left-10 w-24 h-24 bg-amber-300 rounded-full opacity-50 bubble"></div>
+        <div class="absolute -bottom-5 -right-5 w-20 h-20 bg-pink-400 rounded-full opacity-40 bubble"></div>
+        
+        <h1 class="text-4xl md:text-5xl font-bold tracking-wide drop-shadow-md flex justify-center items-center gap-3">
+            <i class="fa-solid fa-gamepad text-pink-500 animate-bounce"></i> 
+            Kids Game Zone 
+            <i class="fa-solid fa-star text-purple-500 animate-pulse"></i>
+        </h1>
+        <p class="text-amber-900 font-medium mt-2 text-sm md:text-base">Pick a game and start your adventure!</p>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8">
+        <div class="relative max-w-md mx-auto mb-10">
+            <input 
+                type="text" 
+                id="searchBar" 
+                placeholder="Search for a game..." 
+                class="w-full pl-12 pr-4 py-3 rounded-full border-4 border-purple-400 bg-white text-gray-700 focus:outline-none focus:border-pink-400 text-lg shadow-md transition-all placeholder-gray-400"
+            >
+            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400 text-xl">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center py-20">
+            <i class="fa-solid fa-spinner fa-spin text-5xl text-purple-500 mb-4"></i>
+            <p class="text-xl text-purple-700 font-semibold">Loading awesome games...</p>
+        </div>
+
+        <div id="error" class="hidden text-center py-20 bg-red-100 rounded-3xl p-6 max-w-md mx-auto border-2 border-red-300">
+            <i class="fa-solid fa-face-frown text-5xl text-red-500 mb-4"></i>
+            <p class="text-lg text-red-700 font-semibold">Oops! Couldn't load the games. Please check your internet connection.</p>
+        </div>
+
+        <div id="gamesGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 hidden">
+            </div>
+
+        <div id="noResults" class="hidden text-center py-20">
+            <i class="fa-solid fa-ghost text-5xl text-amber-500 mb-4 animate-bounce"></i>
+            <p class="text-xl text-gray-600 font-semibold">No games found! Try another name.</p>
+        </div>
+    </main>
+
+    <div id="gameModal" class="fixed inset-0 bg-black/80 z-50 flex flex-col justify-center items-center hidden p-2 md:p-6">
+        <div class="w-full max-w-5xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[90vh]">
+            <div class="bg-pink-500 text-white px-4 py-3 flex justify-between items-center shrink-0">
+                <h2 id="modalGameTitle" class="text-xl md:text-2xl font-bold truncate">Game Title</h2>
+                <button onclick="closeGame()" class="bg-white text-pink-500 hover:bg-pink-100 w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-95 cursor-pointer font-bold shadow-md">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="flex-grow bg-slate-900 relative">
+                <iframe id="gameFrame" src="" class="w-full h-full border-none" allow="autoplay; gamepad; fullscreen"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-purple-600 text-purple-100 py-4 text-center text-sm font-medium shrink-0 rounded-t-3xl mt-8">
+        Made with <i class="fa-solid fa-heart text-pink-400"></i> for kids!
+    </footer>
+
+    <script>
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1OwmIKblYhmN5YoyK7w2g5zD1EqewSd6uvtACIDKGHGs/export?format=csv';
+        
+        let gamesList = [];
+        const vibrantColors = [
+            'bg-emerald-400 border-emerald-500 text-emerald-900',
+            'bg-sky-400 border-sky-500 text-sky-900',
+            'bg-pink-400 border-pink-500 text-pink-900',
+            'bg-indigo-400 border-indigo-500 text-indigo-900',
+            'bg-amber-400 border-amber-500 text-amber-900',
+            'bg-violet-400 border-violet-500 text-violet-900',
+            'bg-rose-400 border-rose-500 text-rose-900'
+        ];
+
+        async function fetchGames() {
+            try {
+                const response = await fetch(SHEET_URL);
+                if (!response.ok) throw new Error('Network error');
+                const csvData = await response.text();
+                const rows = csvData.split(/\r?\n/).map(row => {
+                    return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(cell => cell.replace(/^"| Just"$|"/g, '').trim());
+                });
+
+                for(let i = 1; i < rows.length; i++) {
+                    if (rows[i].length >= 3 && rows[i][0] !== "") {
+                        gamesList.push({
+                            name: rows[i][0],
+                            icon: rows[i][1],
+                            link: rows[i][2]
+                        });
+                    }
+                }
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('gamesGrid').classList.remove('hidden');
+                renderGames(gamesList);
+            } catch (error) {
+                console.error('Error fetching sheet data:', error);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').classList.remove('hidden');
+            }
+        }
+
+        function renderGames(games) {
+            const grid = document.getElementById('gamesGrid');
+            const noResults = document.getElementById('noResults');
+            grid.innerHTML = '';
+            if(games.length === 0) {
+                grid.classList.add('hidden');
+                noResults.classList.remove('hidden');
+                return;
+            }
+            noResults.classList.add('hidden');
+            grid.classList.remove('hidden');
+            games.forEach((game, index) => {
+                const colorClass = vibrantColors[index % vibrantColors.length];
+                const card = document.createElement('div');
+                card.className = `group transform hover:scale-105 active:scale-95 transition-all duration-300 bg-white rounded-3xl p-4 shadow-md hover:shadow-xl border-4 border-b-8 cursor-pointer flex flex-col items-center justify-between text-center ${colorClass.split(' ')[1]}`;
+                card.onclick = () => playGame(game.name, game.link);
+                card.innerHTML = `
+                    <div class="w-20 h-20 md:w-24 md:h-24 rounded-2xl overflow-hidden bg-white shadow-inner flex items-center justify-center mb-3 group-hover:rotate-3 transition-transform">
+                        <img src="${game.icon}" alt="${game.name}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/150x150/d8b4fe/ffffff?text=Game'">
+                    </div>
+                    <h3 class="font-bold text-base md:text-lg leading-tight line-clamp-2 text-gray-800 group-hover:text-purple-700">
+                        ${game.name}
+                    </h3>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        document.getElementById('searchBar').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredGames = gamesList.filter(game => 
+                game.name.toLowerCase().includes(searchTerm)
+            );
+            renderGames(filteredGames);
+        });
+
+        function playGame(name, url) {
+            document.getElementById('modalGameTitle').innerText = name;
+            document.getElementById('gameFrame').src = url;
+            const modal = document.getElementById('gameModal');
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeGame() {
+            // Game khatm hone par ads open karne ka logic
+            const ad1 = "https://www.effectivecpmnetwork.com/r9mq4c5f3?key=5709003b02193578fbbd9bdeedccf2f6";
+            const ad2 = "https://www.effectivecpmnetwork.com/ga9siitd?key=80928e56f6807f661e38de38e0fcd650";
+            
+            window.open(ad1, '_blank');
+            window.open(ad2, '_blank');
+
+            const modal = document.getElementById('gameModal');
+            modal.classList.add('hidden');
+            document.getElementById('gameFrame').src = ''; 
+            document.body.style.overflow = 'auto'; 
+        }
+
+        fetchGames();
+    </script>
+</body>
+</html>
